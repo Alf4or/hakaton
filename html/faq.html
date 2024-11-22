@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Часто задаваемые вопросы</title>
+    <link rel="stylesheet" href="../css/faq.css">
+</head>
+<body>
+
+    <header>
+        <h1>Часто задаваемые вопросы</h1>
+        <p>Здесь собраны ответы на популярные вопросы.</p>
+    </header>
+
+    
+    <aside class="sidebar">
+        <ul id="topicsList">
+            <li><a href="general.html">Общие вопросы</a></li>
+            <li><a href="technical.html">Техническая поддержка</a></li>
+            <li><a href="course.html">Курсы и обучение</a></li>
+            <li><a href="account.html">Аккаунт и настройки</a></li>
+            <li><a href="faq.html">Часто задаваемые вопросы</a></li>
+        </ul>
+    </aside>
+
+    <div class="content">
+        
+            <!-- Кнопка для возврата на главную страницу -->
+        <a href="index.html" class="back-to-home">Вернуться на главную</a>
+        <section class="faq-section">
+            <h2>Общие вопросы</h2>
+
+            <!-- Вопросы и ответы -->
+            <div class="faq-item">
+                <button class="faq-question">Как задать вопрос?</button>
+                <div class="faq-answer">
+                    Вы можете просто ввести ваш вопрос в поле чата на главной странице, и я постараюсь вам помочь.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Как проверить состояние задания?</button>
+                <div class="faq-answer">
+                    Для проверки состояния задания вам нужно зайти в раздел "Задания" на платформе и проверить статус.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Что делать, если не могу войти в систему?</button>
+                <div class="faq-answer">
+                    Если у вас возникли проблемы с входом, убедитесь, что вы используете правильные данные для входа, или воспользуйтесь функцией восстановления пароля.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Где я могу найти материалы для курсов?</button>
+                <div class="faq-answer">
+                    Материалы для курсов обычно доступны в вашем личном кабинете. Перейдите в раздел "Курсы" и выберите нужный курс.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Как изменить мой пароль?</button>
+                <div class="faq-answer">
+                    Для изменения пароля перейдите в раздел "Аккаунт" в настройках и следуйте инструкции для смены пароля.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Как получить сертификат?</button>
+                <div class="faq-answer">
+                    Сертификат можно получить по окончании курса, если все задания выполнены успешно. Пройдите финальную аттестацию, чтобы получить сертификат.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Что такое приоритет задач?</button>
+                <div class="faq-answer">
+                    Приоритет задач позволяет вам разделить их на срочные и важные. Вы можете выбрать приоритет задачи при ее создании.
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <button class="faq-question">Как добавить задачу с приоритетом?</button>
+                <div class="faq-answer">
+                    Для добавления задачи с приоритетом выберите нужный приоритет при создании задачи в разделе "Задания".
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Скрипт для раскрывающихся вопросов
+        document.addEventListener('DOMContentLoaded', function() {
+            const faqItems = document.querySelectorAll('.faq-item');
+
+            faqItems.forEach(function(item) {
+                const questionButton = item.querySelector('.faq-question');
+                
+                questionButton.addEventListener('click', function() {
+                    item.classList.toggle('active'); // Переключаем активное состояние
+                });
+            });
+        });
+    </script>
+
+</body>
+</html>

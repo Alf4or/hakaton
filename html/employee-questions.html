@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ответы на вопросы пользователей</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .question {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .answer-box {
+            display: flex;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        .answer-box textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .answer-box button {
+            align-self: flex-end;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .answer-box button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Вопросы пользователей</h1>
+    <div id="questionsContainer">
+        <!-- Вопросы пользователей будут загружены сюда -->
+    </div>
+
+    <script>
+        const questionsEndpoint = '/get-questions'; // путь к вашему endpoint
+
+        // Загрузка вопросов
+        async function loadQuestions() {
+            try {
+                const response = await fetch(questionsEndpoint);
+
+                if (!response.ok) {
+                    console.error('Ошибка сервера:', response.status, response.statusText);
+                    alert('Ошибка загрузки вопросов. Проверьте консоль для деталей.');
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.questions) {
+                    const container = document.getElementById('questionsContainer');
+                    container.innerHTML = ''; // Очистка старых данных
+
+                    data.questions.forEach(question => {
+                        const questionDiv = document.createElement('div');
+                        questionDiv.classList.add('question');
+                        questionDiv.innerHTML = `
+                            <p><strong>Пользователь:</strong> ${question.username}</p>
+                            <p><strong>Вопрос:</strong> ${question.text}</p>
+                            <div class="answer-box">
+                                <textarea placeholder="Введите ваш ответ"></textarea>
+                                <button onclick="sendAnswer(${question.id}, this)">Отправить ответ</button>
+                            </div>
+                            <p><strong>Ответ:</strong> ${question.answer ? question.answer : 'Ответ еще не дан.'}</p>
+                        `;
+                        container.appendChild(questionDiv);
+                    });
+                } else {
+                    alert('Ошибка: нет вопросов в ответе.');
+                }
+            } catch (err) {
+                console.error('Ошибка при загрузке вопросов:', err);
+                alert('Ошибка при загрузке вопросов. Проверьте консоль для деталей.');
+            }
+        }
+
+        // Загружаем вопросы при загрузке страницы
+        document.addEventListener('DOMContentLoaded', loadQuestions);
+
+        // Отправка ответа
+        async function sendAnswer(questionId, button) {
+            const answerBox = button.previousElementSibling;
+            const answerText = answerBox.value.trim();
+
+            if (!answerText) {
+                alert('Ответ не может быть пустым.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/questions/${questionId}/answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ answer: answerText })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    alert('Ответ отправлен пользователю.');
+                    loadQuestions(); // Обновление списка вопросов
+                } else {
+                    alert('Ошибка отправки ответа.');
+                }
+            } catch (err) {
+                console.error('Ошибка:', err);
+            }
+        }
+
+        // Загружаем вопросы при загрузке страницы
+        loadQuestions();
+    </script>
+</body>
+</html>

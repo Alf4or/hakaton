@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация нового аккаунта</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/auth.css">
+</head>
+<body>
+<header>
+    <h1>Регистрация нового аккаунта</h1>
+</header>
+
+<main class="account-container">
+    <div class="form-container">
+        <h2>Создайте новый аккаунт</h2>
+        <form id="registerForm">
+            <input type="text" id="username" name="username" placeholder="Введите имя пользователя" required>
+            <input type="email" id="email" name="email" placeholder="Введите Email" required>
+            <input type="password" id="password" name="password" placeholder="Введите пароль" required>
+            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Подтвердите пароль" required>
+
+            <!-- Флажок для сотрудника -->
+            <label for="isEmployee">Вы сотрудник?</label>
+            <input type="checkbox" id="isEmployee">
+
+            <!-- Контейнер для должности -->
+            <div id="positionContainer" class="position-container" style="display: none;">
+                <input type="text" id="position" name="position" placeholder="Ваша должность">
+            </div>
+
+            <!-- Поле для ввода пароля администратора -->
+            <div id="adminPasswordContainer" class="admin-password-container" style="display: none;">
+                <input type="password" id="adminPassword" name="adminPassword" placeholder="Введите пароль для администраторов">
+            </div>
+
+            <!-- Место для ошибки -->
+            <div id="error" class="error" style="display: none;">Неверный пароль администратора</div>
+
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+
+        <p>Уже есть аккаунт? <a href="login.html">Войти</a></p>
+    </div>
+</main>
+
+<script>
+    // Получаем элементы
+    const isEmployeeCheckbox = document.getElementById('isEmployee');
+    const positionContainer = document.getElementById('positionContainer');
+    const adminPasswordContainer = document.getElementById('adminPasswordContainer');
+    const registerForm = document.getElementById('registerForm');
+    const positionField = document.getElementById('position');
+    const adminPasswordField = document.getElementById('adminPassword');
+    const errorDiv = document.getElementById('error');
+
+    // Слушаем изменение состояния флажка
+    isEmployeeCheckbox.addEventListener('change', function () {
+        if (this.checked) {
+            positionContainer.style.display = 'block'; // Показываем поле должности
+            adminPasswordContainer.style.display = 'block'; // Показываем поле для пароля администратора
+            positionField.required = true; // Устанавливаем обязательность
+            adminPasswordField.required = true; // Устанавливаем обязательность
+        } else {
+            positionContainer.style.display = 'none'; // Скрываем поле должности
+            adminPasswordContainer.style.display = 'none'; // Скрываем поле для пароля администратора
+            positionField.required = false; // Снимаем обязательность
+            adminPasswordField.required = false; // Снимаем обязательность
+        }
+    });
+
+    // Обработка отправки формы
+    registerForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const isEmployee = isEmployeeCheckbox.checked;
+        const position = isEmployee ? positionField.value : ''; // Передаем должность только если флажок выбран
+        const adminPassword = isEmployee ? adminPasswordField.value : '';
+
+        // Проверка совпадения паролей
+        if (password !== confirmPassword) {
+            alert('Пароли не совпадают!');
+            return;
+        }
+
+        // Проверка пароля администратора
+        if (isEmployee && adminPassword !== 'admin1234') {
+            errorDiv.style.display = 'block'; // Показываем ошибку
+            return;
+        } else {
+            errorDiv.style.display = 'none'; // Скрываем ошибку, если пароль правильный
+        }
+
+        try {
+            // Отправка данных на сервер через fetch
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password, isEmployee, position, adminPassword })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                alert('Регистрация прошла успешно!');
+                window.location.href = 'login.html'; // Перенаправление на страницу входа
+            } else {
+                alert(result.error || 'Ошибка регистрации. Попробуйте снова.');
+            }
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Произошла ошибка при регистрации.');
+        }
+    });
+</script>
+</body>
+</html>

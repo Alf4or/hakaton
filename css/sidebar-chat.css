@@ -1,0 +1,152 @@
+/* Общие стили для страницы */
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    height: 100vh;
+    position: relative;
+}
+
+/* Заголовок */
+header {
+    background-color: #333;
+    color: white;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+/* Контейнер для страницы */
+.container {
+    width: 100%;
+    display: flex;
+    justify-content: center; /* Центрируем содержимое */
+    align-items: flex-start;
+    padding-top: 80px; /* Отступ от header */
+}
+
+/* Основная часть чата */
+.chat {
+    flex: 1;
+    padding: 20px;
+    background-color: white;
+    margin-left: 250px; /* Отступ для боковой панели */
+    border-radius: 8px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    max-width: 800px; /* Максимальная ширина чата */
+    width: 100%;
+}
+
+.chat h2 {
+    font-size: 1.6em;
+    margin-bottom: 20px;
+}
+
+/* Стили для блока сообщений */
+.chat-box {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.chatlog {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 1em;
+}
+
+/* Поле для ввода текста и кнопка отправки */
+input {
+    width: 80%;
+    padding: 12px;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 1em;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+    background-color: #f9f9f9;
+}
+
+input:focus {
+    border-color: #007BFF;
+}
+
+button {
+    padding: 12px 20px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+/* Стили для кнопки "Вернуться на главную" */
+.back-to-home {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #007BFF;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 16px;
+    text-align: center;
+}
+
+.back-to-home:hover {
+    background-color: #0056b3;
+}
+
+/* Стили для кнопки "Аккаунт" в правом верхнем углу */
+.account-link {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 1.4em;
+    font-weight: bold; /* Сделано жирным */
+    color: #007BFF;
+    text-decoration: none;
+    z-index: 10;
+}
+
+.account-link:hover {
+    text-decoration: underline;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .chat {
+        margin-left: 0; /* Убираем отступ для маленьких экранов */
+        width: 100%;
+    }
+}

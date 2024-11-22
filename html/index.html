@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интеллектуальная система технической поддержки</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/bot.css">
+    <link rel="stylesheet" href="../css/sidebar-chat.css">
+</head>
+<body>
+
+    <!-- Заголовок страницы -->
+    <header>
+        <h1>Интеллектуальная система технической поддержки</h1>
+        <p>Выберите тему или задайте вопрос в чате!</p>
+        <div class="account-link">
+            <a href="login.html">Аккаунт</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Боковая панель с темами -->
+        <aside class="sidebar">
+            <ul id="topicsList">
+                <li><a href="general.html">Общие вопросы</a></li>
+                <li><a href="technical.html">Техническая поддержка</a></li>
+                <li><a href="course.html">Курсы и обучение</a></li>
+                <li><a href="account.html">Аккаунт и настройки</a></li>
+                <li><a href="faq.html">Часто задаваемые вопросы</a></li>
+            </ul>
+        </aside>
+
+        <!-- Основной чат -->
+        <main class="chat">
+            <section id="faq">
+                <h2>Чат-бот для быстрого ответа на ваши вопросы</h2>
+                
+                <!-- Чат -->
+                <section class="chat-box">
+                    <div id="chatlog" class="chatlog">
+                        <!-- Здесь будут отображаться сообщения чата -->
+                    </div>
+                    <input type="text" id="userMessage" placeholder="Введите ваш вопрос...">
+                    <button id="sendBtn">Отправить</button>
+                </section>
+
+                <!-- Задания -->
+                <section class="task-priorities">
+                    <h2>Задания</h2>
+                    <form id="taskForm">
+                        <input type="text" id="taskDescription" placeholder="Опишите задачу..." required>
+                        <select id="taskPriority">
+                            <option value="urgent">Срочное</option>
+                            <option value="important">Важное</option>
+                        </select>
+                        <button type="submit">Добавить задачу</button>
+                    </form>
+
+                    <div id="urgentTasks">
+                        <h3>Срочные задачи</h3>
+                        <ul id="urgentTaskList"></ul>
+                    </div>
+
+                    <div id="importantTasks">
+                        <h3>Важные задачи</h3>
+                        <ul id="importantTaskList"></ul>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <!-- Подключение внешнего JavaScript -->
+    <script src="js/script_bot_Evgen.js"></script>
+    <script src="js/task.js"></script>
+    <script src="js/log.js"></script>
+
+
+</body>
+</html>
