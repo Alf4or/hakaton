@@ -1,252 +1,196 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const fs = require('fs');
 const path = require('path');
-const cors = require('cors'); // Подключаем CORS
+const cors = require('cors');
 const session = require('express-session');
-const bcrypt = require('bcryptjs');
-const sqlite3 = require('sqlite3').verbose();
-const { promisify } = require('util');
+const { initializeDatabase } = require('./utils/database');
+
+// Импорт маршрутов
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const ticketRoutes = require('./routes/tickets');
+const taskRoutes = require('./routes/tasks');
+const notificationRoutes = require('./routes/notifications');
+const faqRoutes = require('./routes/faq');
+const settingsRoutes = require('./routes/settings');
+
+// Импорт middleware
+const { rateLimit, csrfToken, maintenanceMode } = require('./middleware/auth');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-// Подключение базы данных SQLite
-const db = new sqlite3.Database('./database.db');
-db.run = promisify(db.run);
-db.get = promisify(db.get);
-db.all = promisify(db.all);
+// ============================================
+// КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ
+// ============================================
 
-// Middleware для обработки JSON и сессий
-app.use(bodyParser.json());
-app.use(session({
-    secret: 'your_secret_key',
-    resave: false,
-    saveUninitialized: true,
-}));
-// Обслуживание статических файлов HTML
-app.use(express.static(path.join(__dirname, 'html')));
-
-// Маршруты для статических файлов CSS и JS
-app.use('/css', express.static(path.join(__dirname, 'css')));
-app.use('/js', express.static(path.join(__dirname, 'js')));
-
-// Корневой маршрут
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'html', 'index.html'));
-});
-
-// Функция для проверки роли
-function ensureRole(requiredRole) {
-    return (req, res, next) => {
-        if (req.session.role === requiredRole) {
-            next();
-        } else {
-            res.status(403).send('Доступ запрещен');
-        }
-    };
-}
-
-// Функция для создания таблицы пользователей
-async function initializeDatabase() {
-    await db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL,
-            position TEXT
-        )
-    `);
-}
-
-// Регистрация пользователя
-app.post('/register', async (req, res) => {
-    const { username, email, password, isEmployee, position, adminPassword } = req.body;
-
-    let role = 'user';
-    if (isEmployee) {
-        if (adminPassword !== 'admin1234') {
-            return res.status(403).json({ success: false, error: 'Неверный пароль администратора' });
-        }
-        role = 'employee';
-    }
-
-    const hashedPassword = bcrypt.hashSync(password, 10);
-
-    try {
-        await db.run(
-            `INSERT INTO users (username, email, password, role, position) VALUES (?, ?, ?, ?, ?)`,
-            [username, email, hashedPassword, role, position || null]
-        );
-        res.json({ success: true, message: 'Пользователь успешно зарегистрирован!' });
-    } catch (err) {
-        if (err.message.includes('UNIQUE')) {
-            return res.status(400).json({ success: false, error: 'Пользователь с таким именем или email уже существует' });
-        }
-        res.status(500).json({ success: false, error: 'Ошибка при регистрации пользователя' });
-    }
-});
-// Установка EJS как шаблонизатор
+// Настройка EJS как шаблонизатора
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'html'));
 
-// Парсер для обработки URL-кодированных данных (например, из форм)
-app.use(express.urlencoded({ extended: true }));
+// Middleware
+app.use(cors({ origin: true, credentials: true }));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-// Маршрут для отображения административной панели
+// Rate limiting
+app.use('/api/', rateLimit({ windowMs: 60000, maxRequests: 100 }));
+app.use('/login', rateLimit({ windowMs: 300000, maxRequests: 10 }));
+app.use('/register', rateLimit({ windowMs: 300000, maxRequests: 5 }));
+
+// CSRF защита
+app.use(csrfToken);
+app.use(maintenanceMode);
+
+// Сессии
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your_secret_key_change_in_production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+}));
+
+// ============================================
+// СТАТИЧЕСКИЕ ФАЙЛЫ
+// ============================================
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'html')));
+app.use('/css', express.static(path.join(__dirname, 'css')));
+app.use('/js', express.static(path.join(__dirname, 'js')));
+
+// ============================================
+// API МАРШРУТЫ
+// ============================================
+
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', ticketRoutes);
+app.use('/api', taskRoutes);
+app.use('/api', notificationRoutes);
+app.use('/api', faqRoutes);
+app.use('/api', settingsRoutes);
+
+// ============================================
+// СТАРЫЕ МАРШРУТЫ (обратная совместимость)
+// ============================================
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'html', 'index.html')));
+
 app.get('/admin', async (req, res) => {
+    if (!req.session.userId || req.session.role !== 'admin') {
+        return res.status(403).send('Доступ запрещен');
+    }
     try {
-        const users = await db.all('SELECT * FROM users'); // Получение всех пользователей
-        res.render('admin', { users }); // Рендеринг admin.ejs с данными пользователей
+        const db = require('./utils/database');
+        const users = await db.all('SELECT id, username, email, role, position, status, created_at FROM users');
+        res.render('admin', { users });
     } catch (error) {
-        console.error('Ошибка при получении пользователей:', error);
-        res.status(500).send('Ошибка при получении пользователей.');
+        console.error('Ошибка:', error);
+        res.status(500).send('Ошибка.');
     }
 });
-// ВЫХОД ИЗ АДМИНКИ
-app.post('/logout', (req, res) => {
-    // Например, удалить сессию пользователя или выполнить другие необходимые действия
-    req.session.destroy(err => {
-        if (err) {
-            return res.status(500).send('Ошибка при выходе.');
-        }
-        res.redirect('/login.html');
-    });
-});
-// ВЫЗОВ ПОВЫШЕНИЯ
-app.post('/admin/promote/:id', (req, res) => {
-    const userId = req.params.id;
 
-    // Определите новую роль для повышения
-    const newRole = "admin"; // Измените роль при необходимости
-
-    db.run('UPDATE users SET role = ? WHERE id = ?', [newRole, userId], function(err) {
-        if (err) {
-            console.error(err);
-            return res.status(500).send('Ошибка при обновлении роли');
-        }
-
-        // Перенаправление обратно на административную панель
-        return res.redirect('/admin');
-    });
-});
-
-// ВЫЗОВ УДАЛЕНИЯ
-app.post('/admin/delete/:id', async (req, res) => {
-    const userId = req.params.id;
-
-    try {
-        const result = await db.run('DELETE FROM users WHERE id = ?', userId);
-        
-        if (result.changes > 0) {
-            return res.redirect('/admin');
-        } else {
-            return res.status(404).send('Пользователь не найден.');
-        }
-    } catch (error) {
-        console.error('Ошибка при удалении пользователя:', error);
-        return res.status(500).send('Ошибка при удалении пользователя.');
-    }
-});
-// Эндпоинт для сохранения вопросов
-app.post('/save-question', (req, res) => {
-    const question = req.body.question;
-    if (!question) {
-        return res.status(400).send('Нет вопроса для сохранения.');
-    }
-
-    // Здесь можно добавить код для сохранения вопроса
-    fs.appendFile('unanswered_questions.json', question + '\n', (err) => {
-        if (err) {
-            console.error('Ошибка при сохранении вопроса:', err);
-            return res.status(500).send('Ошибка при сохранении вопроса.');
-        }
-        res.status(200).send('Вопрос успешно сохранён.');
-    });
-});
-// Эндпоинт для получения невостребованных вопросов
-app.get('/get-questions', (req, res) => {
-    const filePath = 'unanswered_questions.json';
-    
-    fs.readFile(filePath, 'utf8', (err, data) => {
-        if (err) {
-            console.error('Ошибка при чтении файла:', err);
-            return res.status(500).send('Ошибка при чтении файла.');
-        }
-        
-        const questions = data.split('\n').filter((q) => q); // Разделение на вопросы и удаление пустых строк
-        res.json(questions);
-    });
-});
-// Логин пользователя
 app.post('/login', async (req, res) => {
     const { usernameOrEmail, password } = req.body;
-
     try {
-        const user = await db.get(
-            `SELECT * FROM users WHERE username = ? OR email = ?`,
-            [usernameOrEmail, usernameOrEmail]
-        );
-
-        if (!user) {
-            return res.status(401).json({ success: false, error: 'Неверное имя пользователя или пароль' });
-        }
-
-        const passwordMatch = bcrypt.compareSync(password, user.password);
-        if (!passwordMatch) {
-            return res.status(401).json({ success: false, error: 'Неверное имя пользователя или пароль' });
-        }
-
+        const db = require('./utils/database');
+        const bcrypt = require('bcryptjs');
+        const user = await db.get(`SELECT * FROM users WHERE username = ? OR email = ?`, [usernameOrEmail, usernameOrEmail]);
+        if (!user) return res.status(401).json({ success: false, error: 'Неверные данные' });
+        if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ success: false, error: 'Неверные данные' });
+        
         req.session.userId = user.id;
         req.session.username = user.username;
         req.session.role = user.role;
-
-        if (user.role === 'admin') {
-            res.json({ success: true, role: 'admin', redirect: '/admin' });
-        } else if (user.role === 'employee') {
-            res.json({ success: true, role: 'employee', redirect: '/employee-panel' });
-        } else {
-            res.json({ success: true, role: 'user', redirect: '/chat' });
-        }
+        
+        let redirect = '/index.html';
+        if (user.role === 'admin') redirect = '/admin';
+        else if (user.role === 'employee') redirect = '/employee-panel';
+        
+        res.json({ success: true, role: user.role, redirect });
     } catch (err) {
-        res.status(500).json({ success: false, error: 'Ошибка при входе в систему' });
+        res.status(500).json({ success: false, error: 'Ошибка входа' });
     }
 });
 
-
-
-
-
-
-// Эндпоинт для получения FAQ
-async function readFAQFile() {
-    const filePath = path.join(__dirname, 'faq.json');
-    try {
-        const fileData = await fs.promises.readFile(filePath, 'utf-8');
-        return JSON.parse(fileData);
-    } catch (error) {
-        console.error('Ошибка при чтении FAQ файла:', error);
-        throw new Error('Ошибка при загрузке FAQ');
+app.post('/register', async (req, res) => {
+    const { username, email, password, isEmployee, position, adminPassword } = req.body;
+    let role = 'user';
+    if (isEmployee && adminPassword !== 'admin1234') {
+        return res.status(403).json({ success: false, error: 'Неверный пароль админа' });
     }
-}
+    if (isEmployee) role = 'employee';
+    
+    try {
+        const db = require('./utils/database');
+        const bcrypt = require('bcryptjs');
+        await db.run(`INSERT INTO users (username, email, password, role, position) VALUES (?, ?, ?, ?, ?)`,
+            [username, email, bcrypt.hashSync(password, 10), role, position]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ success: false, error: 'Ошибка регистрации' });
+    }
+});
+
+app.post('/logout', (req, res) => {
+    req.session.destroy(err => err ? res.status(500).send('Ошибка') : res.redirect('/login.html'));
+});
+
+app.post('/admin/promote/:id', (req, res) => {
+    const db = require('./utils/database');
+    db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', req.params.id], err => 
+        err ? res.status(500).send('Ошибка') : res.redirect('/admin'));
+});
+
+app.post('/admin/delete/:id', async (req, res) => {
+    const db = require('./utils/database');
+    try {
+        const r = await db.run('DELETE FROM users WHERE id = ?', req.params.id);
+        res.redirect(r.changes > 0 ? '/admin' : '/admin?error=notfound');
+    } catch (e) { res.status(500).send('Ошибка'); }
+});
+
+app.post('/save-question', (req, res) => {
+    const fs = require('fs');
+    if (!req.body.question) return res.status(400).send('Нет вопроса');
+    fs.appendFile('unanswered_questions.json', req.body.question + '\n', err => 
+        err ? res.status(500).send('Ошибка') : res.send('OK'));
+});
+
+app.get('/get-questions', (req, res) => {
+    const fs = require('fs');
+    fs.readFile('unanswered_questions.json', 'utf8', (err, data) => {
+        if (err) return res.status(500).send('Ошибка');
+        res.json(data.split('\n').filter(q => q));
+    });
+});
 
 app.get('/faq', async (req, res) => {
     try {
-        const faqData = await readFAQFile();
-        res.json(faqData);
-    } catch (error) {
-        res.status(500).json({ error: 'Не удалось загрузить FAQ' });
-    }
+        const data = await require('fs').promises.readFile(path.join(__dirname, 'js', 'faq.json'), 'utf-8');
+        res.json(JSON.parse(data));
+    } catch (e) { res.status(500).json({ error: 'Ошибка FAQ' }); }
 });
 
-// Запуск сервера
-// Запуск сервера и инициализация базы данных
+// Обработка 404 и ошибок
+app.use((req, res) => res.status(404).send('404 - Страница не найдена'));
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Внутренняя ошибка' });
+});
+
+// Запуск
 initializeDatabase().then(() => {
     app.listen(port, () => {
-        console.log(`Сервер запущен на http://localhost:${port}`);
+        console.log(`\n============================================`);
+        console.log(`Сервер запущен: http://localhost:${port}`);
+        console.log(`============================================`);
+        console.log(`API: /api/auth/*, /api/admin/*, /api/tickets/*`);
+        console.log(`       /api/tasks/*, /api/notifications/*`);
+        console.log(`       /api/faq/*, /api/settings/*`);
+        console.log(`============================================\n`);
     });
-}).catch(error => {
-    console.error('Ошибка инициализации базы данных:', error);
-});
+}).catch(e => { console.error('Ошибка БД:', e); process.exit(1); });
+
+module.exports = app;
