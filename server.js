@@ -1,196 +1,220 @@
+/**
+ * Основной сервер приложения
+ * Поддержка системы поддержки с расширенным функционалом
+ */
+
+require('dotenv').config();
+
 const express = require('express');
-const bodyParser = require('body-parser');
-const path = require('path');
-const cors = require('cors');
 const session = require('express-session');
-const { initializeDatabase } = require('./utils/database');
+const cors = require('cors');
+const path = require('path');
+const http = require('http');
+const fs = require('fs');
+
+// Импорт конфигурации и утилит
+const config = require('./config');
+const logger = require('./utils/logger');
+const { httpLogger } = require('./utils/logger');
+
+// Импорт сервисов
+const { emailService, socketService } = require('./services');
 
 // Импорт маршрутов
-const authRoutes = require('./routes/auth');
-const adminRoutes = require('./routes/admin');
-const ticketRoutes = require('./routes/tickets');
-const taskRoutes = require('./routes/tasks');
-const notificationRoutes = require('./routes/notifications');
-const faqRoutes = require('./routes/faq');
-const settingsRoutes = require('./routes/settings');
+const routes = require('./routes');
 
-// Импорт middleware
-const { rateLimit, csrfToken, maintenanceMode } = require('./middleware/auth');
-
+// Инициализация Express
 const app = express();
-const port = process.env.PORT || 3000;
+const server = http.createServer(app);
 
 // ============================================
-// КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ
+// MIDDLEWARE
 // ============================================
 
-// Настройка EJS как шаблонизатора
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'html'));
-
-// Middleware
-app.use(cors({ origin: true, credentials: true }));
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-
-// Rate limiting
-app.use('/api/', rateLimit({ windowMs: 60000, maxRequests: 100 }));
-app.use('/login', rateLimit({ windowMs: 300000, maxRequests: 10 }));
-app.use('/register', rateLimit({ windowMs: 300000, maxRequests: 5 }));
-
-// CSRF защита
-app.use(csrfToken);
-app.use(maintenanceMode);
-
-// Сессии
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'your_secret_key_change_in_production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+// CORS
+app.use(cors({
+    origin: config.cors.origin,
+    credentials: true,
 }));
 
-// ============================================
-// СТАТИЧЕСКИЕ ФАЙЛЫ
-// ============================================
+// Body parsers
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Session middleware
+app.use(session({
+    secret: config.security.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: config.env === 'production',
+        httpOnly: true,
+        maxAge: config.security.sessionTimeoutMs,
+    },
+}));
+
+// HTTP логирование
+app.use(httpLogger);
+
+// Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname, 'html')));
-app.use('/css', express.static(path.join(__dirname, 'css')));
-app.use('/js', express.static(path.join(__dirname, 'js')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================
-// API МАРШРУТЫ
+// API ROUTES
 // ============================================
 
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api', ticketRoutes);
-app.use('/api', taskRoutes);
-app.use('/api', notificationRoutes);
-app.use('/api', faqRoutes);
-app.use('/api', settingsRoutes);
+const apiPrefix = config.api.prefix;
+
+// Auth routes
+app.use(`${apiPrefix}/auth`, routes.auth);
+
+// Tickets routes
+app.use(`${apiPrefix}`, routes.tickets);
+
+// Tasks routes
+app.use(`${apiPrefix}`, routes.tasks);
+
+// Admin routes
+app.use(`${apiPrefix}/admin`, routes.admin);
+
+// Notifications routes
+app.use(`${apiPrefix}`, routes.notifications);
+
+// FAQ routes
+app.use(`${apiPrefix}`, routes.faq);
+
+// Settings routes
+app.use(`${apiPrefix}`, routes.settings);
+
+// Reports routes
+app.use(`${apiPrefix}`, routes.reports);
+
+// Search routes
+app.use(`${apiPrefix}`, routes.search);
 
 // ============================================
-// СТАРЫЕ МАРШРУТЫ (обратная совместимость)
+// HEALTH CHECK & STATUS
 // ============================================
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'html', 'index.html')));
-
-app.get('/admin', async (req, res) => {
-    if (!req.session.userId || req.session.role !== 'admin') {
-        return res.status(403).send('Доступ запрещен');
-    }
-    try {
-        const db = require('./utils/database');
-        const users = await db.all('SELECT id, username, email, role, position, status, created_at FROM users');
-        res.render('admin', { users });
-    } catch (error) {
-        console.error('Ошибка:', error);
-        res.status(500).send('Ошибка.');
-    }
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: config.env,
+    });
 });
 
-app.post('/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body;
-    try {
-        const db = require('./utils/database');
-        const bcrypt = require('bcryptjs');
-        const user = await db.get(`SELECT * FROM users WHERE username = ? OR email = ?`, [usernameOrEmail, usernameOrEmail]);
-        if (!user) return res.status(401).json({ success: false, error: 'Неверные данные' });
-        if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ success: false, error: 'Неверные данные' });
-        
-        req.session.userId = user.id;
-        req.session.username = user.username;
-        req.session.role = user.role;
-        
-        let redirect = '/index.html';
-        if (user.role === 'admin') redirect = '/admin';
-        else if (user.role === 'employee') redirect = '/employee-panel';
-        
-        res.json({ success: true, role: user.role, redirect });
-    } catch (err) {
-        res.status(500).json({ success: false, error: 'Ошибка входа' });
-    }
-});
-
-app.post('/register', async (req, res) => {
-    const { username, email, password, isEmployee, position, adminPassword } = req.body;
-    let role = 'user';
-    if (isEmployee && adminPassword !== 'admin1234') {
-        return res.status(403).json({ success: false, error: 'Неверный пароль админа' });
-    }
-    if (isEmployee) role = 'employee';
+app.get('/status', async (req, res) => {
+    const db = require('./utils/database');
     
     try {
-        const db = require('./utils/database');
-        const bcrypt = require('bcryptjs');
-        await db.run(`INSERT INTO users (username, email, password, role, position) VALUES (?, ?, ?, ?, ?)`,
-            [username, email, bcrypt.hashSync(password, 10), role, position]);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(400).json({ success: false, error: 'Ошибка регистрации' });
+        // Проверка БД
+        await db.get('SELECT 1');
+        
+        res.json({
+            status: 'healthy',
+            services: {
+                database: 'connected',
+                email: emailService.initialized ? 'initialized' : 'disabled',
+                socket: socketService.io ? 'connected' : 'disconnected',
+            },
+            stats: socketService.getStats(),
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'unhealthy',
+            error: error.message,
+        });
     }
 });
 
-app.post('/logout', (req, res) => {
-    req.session.destroy(err => err ? res.status(500).send('Ошибка') : res.redirect('/login.html'));
-});
+// ============================================
+// ERROR HANDLING
+// ============================================
 
-app.post('/admin/promote/:id', (req, res) => {
-    const db = require('./utils/database');
-    db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', req.params.id], err => 
-        err ? res.status(500).send('Ошибка') : res.redirect('/admin'));
-});
-
-app.post('/admin/delete/:id', async (req, res) => {
-    const db = require('./utils/database');
-    try {
-        const r = await db.run('DELETE FROM users WHERE id = ?', req.params.id);
-        res.redirect(r.changes > 0 ? '/admin' : '/admin?error=notfound');
-    } catch (e) { res.status(500).send('Ошибка'); }
-});
-
-app.post('/save-question', (req, res) => {
-    const fs = require('fs');
-    if (!req.body.question) return res.status(400).send('Нет вопроса');
-    fs.appendFile('unanswered_questions.json', req.body.question + '\n', err => 
-        err ? res.status(500).send('Ошибка') : res.send('OK'));
-});
-
-app.get('/get-questions', (req, res) => {
-    const fs = require('fs');
-    fs.readFile('unanswered_questions.json', 'utf8', (err, data) => {
-        if (err) return res.status(500).send('Ошибка');
-        res.json(data.split('\n').filter(q => q));
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'Endpoint not found',
+        path: req.originalUrl,
     });
 });
 
-app.get('/faq', async (req, res) => {
-    try {
-        const data = await require('fs').promises.readFile(path.join(__dirname, 'js', 'faq.json'), 'utf-8');
-        res.json(JSON.parse(data));
-    } catch (e) { res.status(500).json({ error: 'Ошибка FAQ' }); }
-});
-
-// Обработка 404 и ошибок
-app.use((req, res) => res.status(404).send('404 - Страница не найдена'));
+// Global error handler
 app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка' });
+    logger.error('Unhandled error', {
+        message: err.message,
+        stack: err.stack,
+        url: req.originalUrl,
+        method: req.method,
+    });
+
+    res.status(err.status || 500).json({
+        success: false,
+        error: config.env === 'development' ? err.message : 'Internal server error',
+        ...(config.env === 'development' && { stack: err.stack }),
+    });
 });
 
-// Запуск
-initializeDatabase().then(() => {
-    app.listen(port, () => {
-        console.log(`\n============================================`);
-        console.log(`Сервер запущен: http://localhost:${port}`);
-        console.log(`============================================`);
-        console.log(`API: /api/auth/*, /api/admin/*, /api/tickets/*`);
-        console.log(`       /api/tasks/*, /api/notifications/*`);
-        console.log(`       /api/faq/*, /api/settings/*`);
-        console.log(`============================================\n`);
-    });
-}).catch(e => { console.error('Ошибка БД:', e); process.exit(1); });
+// ============================================
+// INITIALIZATION
+// ============================================
 
-module.exports = app;
+async function initialize() {
+    try {
+        // Инициализация БД
+        logger.info('Initializing database...');
+        const db = require('./utils/database');
+        await db.initializeDatabase();
+        logger.info('Database initialized successfully');
+
+        // Инициализация email сервиса
+        logger.info('Initializing email service...');
+        await emailService.initialize();
+
+        // Инициализация Socket.IO
+        logger.info('Initializing Socket.IO...');
+        socketService.initialize(server);
+
+        // Запуск сервера
+        server.listen(config.port, () => {
+            logger.info(`Server running on port ${config.port}`);
+            logger.info(`Environment: ${config.env}`);
+            logger.info(`API Prefix: ${config.api.prefix}`);
+        });
+
+        // Graceful shutdown
+        process.on('SIGTERM', gracefulShutdown);
+        process.on('SIGINT', gracefulShutdown);
+
+    } catch (error) {
+        logger.error('Failed to initialize server', { error: error.message, stack: error.stack });
+        process.exit(1);
+    }
+}
+
+function gracefulShutdown() {
+    logger.info('Graceful shutdown initiated...');
+    
+    server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+    });
+
+    // Force close after timeout
+    setTimeout(() => {
+        logger.error('Forced shutdown due to timeout');
+        process.exit(1);
+    }, 30000);
+}
+
+// ============================================
+// START SERVER
+// ============================================
+
+initialize();
+
+module.exports = { app, server };
